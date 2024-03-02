@@ -1,5 +1,5 @@
-import bodyParser from "body-parser";
 import express, { Request, Response } from "express";
+import bodyParser from "body-parser";
 import { REGISTRY_PORT } from "../config";
 
 export type Node = { nodeId: number; pubKey: string };
@@ -14,16 +14,34 @@ export type GetNodeRegistryBody = {
 };
 
 export async function launchRegistry() {
-  const _registry = express();
-  _registry.use(express.json());
-  _registry.use(bodyParser.json());
+  const app = express();
+  app.use(express.json());
+  app.use(bodyParser.json());
+  let nodeRegistryBody: GetNodeRegistryBody = { nodes: [] };
 
-  // TODO implement the status route
-  // _registry.get("/status", (req, res) => {});
+  app.get("/status", getStatus);
 
-  const server = _registry.listen(REGISTRY_PORT, () => {
-    console.log(`registry is listening on port ${REGISTRY_PORT}`);
+  app.get("/getNodeRegistry", getNodeRegistry);
+
+  app.post("/registerNode", registerNode);
+
+  const server = app.listen(REGISTRY_PORT, () => {
+    console.log(`Registry is listening on port ${REGISTRY_PORT}`);
   });
 
   return server;
+
+  function getStatus(req: Request, res: Response) {
+    res.send("live");
+  }
+
+  function getNodeRegistry(req: Request, res: Response) {
+    res.status(200).json(nodeRegistryBody);
+  }
+
+  function registerNode(req: Request<RegisterNodeBody>, res: Response) {
+    const { nodeId, pubKey } = req.body;
+    nodeRegistryBody.nodes.push({ nodeId, pubKey });
+    res.status(200).json({ result: "ok" });
+  }
 }
