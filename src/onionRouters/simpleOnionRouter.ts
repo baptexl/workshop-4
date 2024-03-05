@@ -13,36 +13,28 @@ export async function simpleOnionRouter(nodeId: number) {
   let lastReceivedDecryptedMessage: string | null = null;
   let lastMessageDestination: number | null = null;
 
-  let rsaKeyPair = await generateRsaKeyPair();
-  let pubKey = await exportPubKey(rsaKeyPair.publicKey);
-  let privateKey = rsaKeyPair.privateKey;
+  const { publicKey, privateKey } = await generateRsaKeyPair();
+  const pubKey = await exportPubKey(publicKey);
+  const node: Node = { nodeId, pubKey };
 
-  let node: Node = { nodeId: nodeId, pubKey: pubKey };
+  // Déclaration de fonctions d'assistance au début pour une meilleure lisibilité
+  async function registerNode(node: Node) {
+    await fetch(`http://localhost:${REGISTRY_PORT}/registerNode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(node),
+    });
+  }
 
-  onionRouter.get("/status", getStatus);
+  async function forwardMessage(destination: number, message: string) {
+    await fetch(`http://localhost:${destination}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+  }
 
-  onionRouter.get("/getLastReceivedEncryptedMessage", getLastReceivedEncryptedMessage);
-
-  onionRouter.get("/getLastReceivedDecryptedMessage", getLastReceivedDecryptedMessage);
-
-  onionRouter.get("/getLastMessageDestination", getLastMessageDestination);
-
-  onionRouter.get("/getPrivateKey", getPrivateKey);
-
-  onionRouter.post("/message", postMessage);
-
-  const server = onionRouter.listen(BASE_ONION_ROUTER_PORT + nodeId, () => {
-    console.log(
-      `Onion router ${nodeId} is listening on port ${
-        BASE_ONION_ROUTER_PORT + nodeId
-      }`
-    );
-  });
-
-  await registerNode(nodeId, pubKey);
-
-  return server;
-
+  // Ensuite, déclaration des handlers de route
   async function getStatus(req: express.Request, res: express.Response) {
     res.send("live");
   }
@@ -73,41 +65,23 @@ export async function simpleOnionRouter(nodeId: number) {
     lastReceivedEncryptedMessage = message;
     lastReceivedDecryptedMessage = remainingMessage;
     lastMessageDestination = nextDestination;
-    await fetch(`http://localhost:${nextDestination}/message`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message: remainingMessage }),
-    });
+    await forwardMessage(nextDestination, remainingMessage);
     res.status(200).send("success");
   }
 
-  async function registerNode(nodeId: number, pubKey: string) {
-    await fetch(`http://localhost:${REGISTRY_PORT}/registerNode`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        nodeId: nodeId,
-        pubKey: pubKey,
-      }),
-    });
-  }
+  // Enfin, configuration des routes de l'application
+  onionRouter.get("/status", getStatus);
+  onionRouter.get("/getLastReceivedEncryptedMessage", getLastReceivedEncryptedMessage);
+  onionRouter.get("/getLastReceivedDecryptedMessage", getLastReceivedDecryptedMessage);
+  onionRouter.get("/getLastMessageDestination", getLastMessageDestination);
+  onionRouter.get("/getPrivateKey", getPrivateKey);
+  onionRouter.post("/message", postMessage);
+
+  const server = onionRouter.listen(BASE_ONION_ROUTER_PORT + nodeId, () => {
+    console.log(`Onion router ${nodeId} is listening on port ${BASE_ONION_ROUTER_PORT + nodeId}`);
+  });
+
+  await registerNode(node);
+
+  return server;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
